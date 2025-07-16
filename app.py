@@ -5,6 +5,8 @@ import traceback
 import unicodedata
 from st_audiorec import st_audiorec
 from fpdf import FPDF
+from PyPDF2 import PdfReader
+from docx import Document
 import io
 
 # --- Page Configuration ---
