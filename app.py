@@ -4,8 +4,6 @@ import json
 import traceback
 import unicodedata
 from st_audiorec import st_audiorec
-from fpdf import FPDF
-from PyPDF2 import PdfReader
 from docx import Document
 import io
 
@@ -19,51 +17,6 @@ try:
 except Exception:
     st.error("OpenAI API key not found. Please add it to your Streamlit secrets.", icon="🚨")
     st.stop()
-
-# --- PDF Generation Function ---
-def create_pdf(details, report_data):
-    def sanitize_text(text):
-        # This function robustly handles special characters for PDF generation.
-        return unicodedata.normalize('NFKD', str(text)).encode('ascii', 'ignore').decode('ascii')
-
-    pdf = FPDF()
-    pdf.add_page()
-    pdf.set_font("Arial", 'B', 16)
-    pdf.cell(0, 10, f"Interview Report for: {sanitize_text(details['name'])}", 0, 1, 'C')
-    pdf.ln(5)
-    pdf.set_font("Arial", '', 12)
-    pdf.cell(0, 10, f"Role Level: {details['role_level']} | Salary Expectation: {details['lpa']} LPA", 0, 1, 'C')
-    pdf.ln(10)
-
-    for i, item in enumerate(report_data):
-        pdf.set_font("Arial", 'B', 12)
-        pdf.multi_cell(0, 5, f"Question {i+1}: {sanitize_text(item['question'])}")
-        pdf.ln(2)
-        
-        pdf.set_font("Arial", 'B', 11)
-        pdf.multi_cell(0, 5, "Candidate's Answer:")
-        pdf.set_font("Arial", 'I', 11)
-        pdf.multi_cell(0, 5, f"{sanitize_text(item.get('answer', 'N/A'))}")
-        pdf.ln(2)
-
-        pdf.set_font("Arial", 'B', 11)
-        pdf.multi_cell(0, 5, "Evaluation:")
-        pdf.set_font("Arial", '', 11)
-        
-        eval_data = item.get('evaluation', {}).get('evaluation', {})
-        if eval_data:
-            clarity = eval_data.get('clarity', {})
-            correctness = eval_data.get('correctness', {})
-            depth = eval_data.get('depth', {})
-            pdf.multi_cell(0, 5, f"  Clarity: {clarity.get('score', 0)}/10 - {sanitize_text(clarity.get('justification', ''))}")
-            pdf.multi_cell(0, 5, f"  Correctness: {correctness.get('score', 0)}/10 - {sanitize_text(correctness.get('justification', ''))}")
-            pdf.multi_cell(0, 5, f"  Depth: {depth.get('score', 0)}/10 - {sanitize_text(depth.get('justification', ''))}")
-        
-        summary = item.get('evaluation', {}).get('overall_summary', 'N/A')
-        pdf.multi_cell(0, 5, f"Summary: {sanitize_text(summary)}")
-        pdf.ln(8)
-    
-    return pdf.output(dest='S').encode('latin1')
 
 # --- Session State Initialization ---
 if 'status' not in st.session_state:
