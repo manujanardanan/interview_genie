@@ -37,6 +37,45 @@ def start_new_interview():
         del st.session_state[key]
     st.rerun()
 
+def create_word_document(details, report_data):
+    """Generates a .docx file from the report data."""
+    document = Document()
+    document.add_heading(f"Interview Report for: {details['name']}", level=1)
+    p_details = document.add_paragraph()
+    p_details.add_run(f"Role Level: {details['role_level']}").bold = True
+    document.add_paragraph() 
+
+    for i, item in enumerate(report_data):
+        document.add_heading(f"Question {i+1}: {item['question']}", level=2)
+        
+        p_answer = document.add_paragraph()
+        p_answer.add_run("Candidate's Answer: ").bold = True
+        p_answer.add_run(item.get('answer', 'N/A')).italic = True
+        
+        eval_data = item.get('evaluation', {})
+        summary = eval_data.get('overall_summary', 'No summary available.')
+        scores = eval_data.get('evaluation', {})
+        
+        p_eval = document.add_paragraph()
+        p_eval.add_run("Assessment/Evaluation: ").bold = True
+        p_eval.add_run(summary)
+        
+        clarity = scores.get('clarity', {}).get('score', 0)
+        correctness = scores.get('correctness', {}).get('score', 0)
+        depth = scores.get('depth', {}).get('score', 0)
+        avg_score = round((clarity + correctness + depth) / 3)
+
+        p_score = document.add_paragraph()
+        p_score.add_run("Score: ").bold = True
+        p_score.add_run(f"{avg_score}/10")
+        document.add_paragraph() 
+
+    # Save the document to an in-memory stream
+    doc_stream = io.BytesIO()
+    document.save(doc_stream)
+    doc_stream.seek(0)
+    return doc_stream
+    
 def get_ai_response(prompt_text, model="gpt-4-turbo", as_json=False):
     """Generic function to call OpenAI API."""
     try:
@@ -244,7 +283,7 @@ elif st.session_state.status in ['evaluating', 'report']:
     
     if st.session_state.status == 'evaluating':
         report_data = []
-        with st.spinner("Running detailed per-question evaluation... This is the final step."):
+        with st.spinner("Running detailed per-question evaluation..."):
             for i, question in enumerate(st.session_state.questions_to_ask):
                 st.write(f"Evaluating answer for question {i+1}...")
                 
@@ -263,43 +302,50 @@ elif st.session_state.status in ['evaluating', 'report']:
                 report_data.append({"question": question, "answer": answer, "evaluation": evaluation or {}})
         
         st.session_state.detailed_report = report_data
-        st.session_state.holistic_summary = "" # Reset in case it exists from old versions
-        
-        with st.spinner("Generating final holistic assessment..."):
-            summary_prompt = f"""You are an expert hiring manager. Based on the following per-question evaluations of a candidate, write a final, holistic summary (2-3 paragraphs) of their performance, highlighting strengths, weaknesses, and a final recommendation.
-            EVALUATIONS: {json.dumps(st.session_state.detailed_report, indent=2)}"""
-            holistic_summary = get_ai_response(summary_prompt)
-            if holistic_summary:
-                st.session_state.holistic_summary = holistic_summary
-        
         st.session_state.status = 'report'
         st.rerun()
 
     if st.session_state.status == 'report':
-        st.subheader(f"Overall Holistic Assessment")
-        st.info(st.session_state.get('holistic_summary', 'Could not generate holistic summary.'))
-        st.markdown("---")
+        st.subheader(f"Detailed Assessment for {st.session_state.candidate_details['name']} ({st.session_state.candidate_details['role_level']})")
 
-        with st.popover("Download Report"):
-            st.write("Select a format:")
-            pdf_data = create_pdf(st.session_state.candidate_details, st.session_state.detailed_report)
-            if pdf_data:
-                st.download_button(label="Download as PDF", data=pdf_data, file_name=f"Report_{st.session_state.candidate_details['name']}.pdf")
-            
-        st.subheader("Detailed Question-by-Question Breakdown")
+        # --- CORRECTED: Two-step download logic ---
+        st.markdown("---")
+        st.write("To download the report, first generate the file, then click download.")
+        
+        if st.button("Generate Word Document for Download"):
+            with st.spinner("Creating .docx file..."):
+                # Ensure you have the create_word_document function in your file
+                word_data = create_word_document(st.session_state.candidate_details, st.session_state.detailed_report)
+                st.session_state.word_data = word_data # Save the generated file in memory
+
+        if st.session_state.get("word_data"):
+            st.download_button(
+                label="⬇️ Download Report as Word (.docx)",
+                data=st.session_state.word_data,
+                file_name=f"Interview_Report_{st.session_state.candidate_details['name']}.docx",
+                mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+            )
+        st.markdown("---")
+        
         if st.session_state.detailed_report:
             for i, item in enumerate(st.session_state.detailed_report):
                 with st.container(border=True):
-                    st.markdown(f"**Question {i+1}:** {item['question']}")
-                    st.info(f"**Candidate's Answer:** {item.get('answer', 'N/A')}")
-                    eval_data = item.get('evaluation', {}).get('evaluation', {})
-                    if eval_data:
-                        st.write("**Evaluation:**")
-                        col1, col2, col3 = st.columns(3)
-                        col1.metric("Clarity", f"{eval_data.get('clarity', {}).get('score', 0)}/10")
-                        col2.metric("Correctness", f"{eval_data.get('correctness', {}).get('score', 0)}/10")
-                        col3.metric("Depth", f"{eval_data.get('depth', {}).get('score', 0)}/10")
-                    st.success(f"**Summary:** {item.get('evaluation', {}).get('overall_summary', 'N/A')}")
+                    st.markdown(f"**Q{i+1}: Interviewer:** {item['question']}")
+                    st.markdown(f"**Candidate:** {item.get('answer', 'N/A')}")
+                    
+                    eval_data = item.get('evaluation', {})
+                    summary = eval_data.get('overall_summary', 'No summary available.')
+                    scores = eval_data.get('evaluation', {})
+                    
+                    st.markdown(f"**Assessment/Evaluation:** {summary}")
+                    
+                    clarity = scores.get('clarity', {}).get('score', 0)
+                    correctness = scores.get('correctness', {}).get('score', 0)
+                    depth = scores.get('depth', {}).get('score', 0)
+                    avg_score = round((clarity + correctness + depth) / 3)
+                    
+                    st.markdown(f"**Score:** {avg_score}/10")
+                st.markdown("---")
         else:
             st.error("Could not generate detailed report.")
 
