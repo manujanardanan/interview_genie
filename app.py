@@ -114,22 +114,57 @@ def generate_question(role_level, question_number, jd_text):
     if prompt:
         return get_ai_response(prompt)
     return "All questions have been asked."
-
+    
+def extract_text_from_file(uploaded_file):
+    """Extracts text from uploaded .txt, .pdf, or .docx files."""
+    file_extension = uploaded_file.name.split('.')[-1].lower()
+    text = ""
+    
+    if file_extension == 'txt':
+        text = uploaded_file.getvalue().decode("utf-8")
+    elif file_extension == 'pdf':
+        try:
+            pdf_reader = PdfReader(uploaded_file)
+            for page in pdf_reader.pages:
+                text += page.extract_text()
+        except Exception as e:
+            st.error(f"Error reading PDF file: {e}")
+            return ""
+    elif file_extension == 'docx':
+        try:
+            document = Document(uploaded_file)
+            for para in document.paragraphs:
+                text += para.text + "\n"
+        except Exception as e:
+            st.error(f"Error reading DOCX file: {e}")
+            return ""
+    
+    return text
+    
 # --- STAGE 1: SETUP ---
 if st.session_state.status == 'setup':
     st.header("Stage 1: Candidate Details & Job Description")
+    
+    # NEW: JD Uploader now accepts txt, pdf, and docx
     st.subheader("Upload Job Description")
-    st.info("Please upload the Job Description as a plain text (.txt) file.")
-    uploaded_file = st.file_uploader("Choose a .txt file", type="txt")
+    st.info("You can now upload a .txt, .pdf, or .docx file.")
+    uploaded_file = st.file_uploader("Choose a file for the Job Description", type=["txt", "pdf", "docx"])
+    
+    # NEW: Logic to use the helper function to extract text
     if uploaded_file is not None:
-        st.session_state.jd_text = uploaded_file.getvalue().decode("utf-8")
-        st.success("Job Description uploaded successfully!")
+        if not st.session_state.jd_text: # Process only once
+            with st.spinner("Reading Job Description..."):
+                st.session_state.jd_text = extract_text_from_file(uploaded_file)
+    
+    if st.session_state.jd_text:
+        st.success("Job Description loaded successfully!")
 
     st.subheader("Enter Candidate Details")
     with st.form("setup_form"):
         name = st.text_input("Candidate Name")
         lpa = st.number_input("Salary Expectation (LPA)", min_value=10, value=30)
         submitted = st.form_submit_button("Proceed to Question Prep")
+
         if submitted:
             if name and st.session_state.jd_text:
                 st.session_state.candidate_details = {"name": name, "lpa": lpa, "role_level": "Senior" if lpa > 35 else "Mid"}
@@ -137,7 +172,6 @@ if st.session_state.status == 'setup':
                 st.rerun()
             else:
                 st.error("Please upload a Job Description and enter the candidate's name.")
-
 # --- STAGE 2: QUESTION PREPARATION ---
 elif st.session_state.status == 'question_prep':
     st.header("Stage 2: Prepare Interview Questions")
