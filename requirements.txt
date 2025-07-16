@@ -1,6 +1,6 @@
 streamlit
 openai
-st-audiorec
+streamlit-audiorec
 fpdf2
 python-docx
 PyPDF2
