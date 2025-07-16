@@ -136,34 +136,28 @@ def extract_text_from_file(uploaded_file):
 # --- STAGE 1: SETUP ---
 if st.session_state.status == 'setup':
     st.header("Stage 1: Candidate Details & Job Description")
-    
-    # NEW: JD Uploader now accepts txt, pdf, and docx
     st.subheader("Upload Job Description")
-    st.info("You can now upload a .txt, .pdf, or .docx file.")
+    st.info("Upload the Job Description as a .txt, .pdf, or .docx file.")
     uploaded_file = st.file_uploader("Choose a file for the Job Description", type=["txt", "pdf", "docx"])
-    
-    # NEW: Logic to use the helper function to extract text
-    if uploaded_file is not None:
-        if not st.session_state.jd_text: # Process only once
-            with st.spinner("Reading Job Description..."):
-                st.session_state.jd_text = extract_text_from_file(uploaded_file)
-    
-    if st.session_state.jd_text:
+    if uploaded_file is not None and not st.session_state.get('jd_text'):
+        with st.spinner("Reading Job Description..."):
+            st.session_state.jd_text = extract_text_from_file(uploaded_file)
+    if st.session_state.get('jd_text'):
         st.success("Job Description loaded successfully!")
 
     st.subheader("Enter Candidate Details")
     with st.form("setup_form"):
         name = st.text_input("Candidate Name")
-        lpa = st.number_input("Salary Expectation (LPA)", min_value=10, value=30)
+        role_level = st.selectbox("Select Candidate Level", ("Junior", "Intermediate", "Senior"), index=1)
         submitted = st.form_submit_button("Proceed to Question Prep")
-
         if submitted:
-            if name and st.session_state.jd_text:
-                st.session_state.candidate_details = {"name": name, "lpa": lpa, "role_level": "Senior" if lpa > 35 else "Mid"}
+            if name and st.session_state.get('jd_text'):
+                st.session_state.candidate_details = {"name": name, "role_level": role_level}
                 st.session_state.status = 'question_prep'
                 st.rerun()
             else:
                 st.error("Please upload a Job Description and enter the candidate's name.")
+
 # --- STAGE 2: QUESTION PREPARATION ---
 elif st.session_state.status == 'question_prep':
     st.header("Stage 2: Prepare Interview Questions")
